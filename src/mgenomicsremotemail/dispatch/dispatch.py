@@ -29,6 +29,12 @@ from prompt_toolkit import prompt
 from email_validator import validate_email, EmailNotValidError
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.shortcuts import (
+    checkboxlist_dialog,
+    radiolist_dialog,
+    progress_dialog,
+    input_dialog
+)
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Copyright (c) 2020 Marco Mernberger"
@@ -70,28 +76,41 @@ class RunDispatcher:
                                 all_runs[sub.name] = sub
                     else:
                         pass  # pragma: no cover
-        self.run_ids = all_runs
+        self._run_ids = all_runs
+        self._all_run_ids_and_folders_as_tuples = [(x, x) for x in sorted(self._run_ids.keys(), reverse=True)]
 
-    def check_all_folders(self):
+    @property
+    def run_ids(self):
+        return self._run_ids
+
+    @property
+    def all_run_ids_and_folders_as_tuples(self):
+        return self._all_run_ids_and_folders_as_tuples
+
+    def check_all_folders(self) -> str:
+        result = "Checking all Run IDs:\n---------------------\n"
         for run_id in self.run_ids:
             try:
                 folder = self.get_input_folder(self.run_ids[run_id], run_id)
-                print(run_id)
                 if folder is not None:
                     if not self.check_for_fastq(folder):
-                        print(run_id, f"{folder} is empty")
+                        result += f"{run_id}: is empty ({folder})\n"
                     else:
-                        print(run_id, "ok")
+                        result += f"{run_id}: is ok\n"
                 else:
-                    print(run_id, "No run folder found")
+                    result += f"{run_id}: No run folder detected\n"
             except PermissionError:
-                print(run_id, f"PermissionError for {folder}")
+                result += f"{run_id}: PermissionError for {folder}\n"
             except ValueError as e:
                 if "No fastq folder found" in str(e):
-                    print(run_id, f"no fastq folder for {folder}")
+                    result += f"{run_id}: No fastq folder for {folder}\n"
                 else:
                     print(run_id, self.run_ids[run_id], e)  # pragma: co cover
                     raise  # pragma: co cover
+        return result
+
+    def print_check_all_folders(self):
+        print(self.check_all_folders())
 
     def get_run_ids_string(self):
         outstr = "Existing run ids:\n-----------------------\n"
@@ -228,3 +247,23 @@ Best of luck!
     def cleanup(self):
         for filename in self.public_path.iterdir():
             print(f"Last modified: {time.ctime(os.path.getmtime(str(filename)))}")
+
+    def request_run_ids(self):
+        app = checkboxlist_dialog(
+            title="Run IDs",
+            text="Select the run ids:",
+            values=self.all_run_ids_and_folders_as_tuples,
+        )
+        return app.run()
+
+    def request_groups(self):
+
+        def _get_app():
+            app = input_dialog(
+                title="Research Group",
+                text="Please enter the research group name:"
+            )
+            return app
+
+        app = _get_app()
+        return app.run()

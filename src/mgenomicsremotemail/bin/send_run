@@ -1,55 +1,51 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python 
 """
 This is the executable run file for the dispatcher.
 """
 import sys
-import logging
-import sys
-sys.path.append("/talizorah/mf/andrea_remote/mgenomicsremotemail/src")
+from pathlib import Path
+sys.path.append(str(Path(__file__, '..', '..', '..').resolve()))
+import click
+from mgenomicsremotemail.dispatch import RunDispatcher
 from mgenomicsremotemail import __version__
-from prompt_toolkit.shortcuts import (
-    checkboxlist_dialog,
-    radiolist_dialog,
-    progress_dialog,
-    input_dialog
-)
-import dispatch
-
 
 __author__ = "MarcoMernberger"
 __copyright__ = "MarcoMernberger"
 __license__ = "mit"
 
 
-
+@click.command()
+@click.option("--check", required=False, is_flag=True, help="Check input folders")
+@click.option("--ids", required=False, is_flag=True, help="Print available Run IDs")
+def run(check, ids):
+    dispatcher = RunDispatcher()
+    if ids or check:
+        if ids:
+            click.echo(dispatcher.get_run_ids_string())
+        if check:
+            click.echo(dispatcher.check_all_folders())
+    else:
+        # sen_id = prompt("Enter run id: ")
+        # group = prompt("Enter research group: ")
+        # recipients = prompt("Enter recipients: ")
+        run_ids = dispatcher.request_run_ids()
+        click.echo(run_ids)
+        group = dispatcher.request_groups()
+        
 if __name__ == "__main__":
-    dispatcher = dispatch.RunDispatcher()
-    if len(sys.argv) > 1 and sys.argv[1] == "--test":
-        dispatcher.print_run_ids()
-        dispatcher.check_all_folders()
+    run()
 
-    # sen_id = prompt("Enter run id: ")
-    # group = prompt("Enter research group: ")
-    # recipients = prompt("Enter recipients: ")
-
+"""
     run_ids = ["210525_M03491_0002_000000000-JK2M3"]
     group = "ME"
     recipients = ["ME"]
-    run_id_values = [(x, x) for x in dispatcher.run_ids]
-    run_ids = checkboxlist_dialog(
-        title="Run IDs",
-        text="Select the run ids:",
-        values=run_id_values,
-    ).run()
+
+
     print("run_ids", run_ids)
-    group = input_dialog(
-        title="Research Group", text="Please enter the research group name:"
-    ).run()
     print("group", group)
     recipients_ok = False
     textr = "Please enter the recipient enails as comma-separated list:"
     style = None
-    """
     while not recipients_ok:
         recipients_ok = True
         recipients = input_dialog(
@@ -73,6 +69,6 @@ if __name__ == "__main__":
                     )
                     recipients_ok = False
     print("Recipients", recipients)
-    """
+"""
 #    dispatcher.dispatch(run_ids, group, recipients)
 #    dispatcher.cleanup()

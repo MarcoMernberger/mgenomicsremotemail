@@ -7,16 +7,70 @@ import subprocess
 import smtplib
 from mgenomicsremotemail.dispatch import RunDispatcher
 from pathlib import Path
+from prompt_toolkit.application import create_app_session, DummyApplication, Application
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.output import DummyOutput
+from prompt_toolkit.shortcuts import PromptSession, checkboxlist_dialog
+from mock import patch
 
 
 __author__ = "MarcoMernberger"
 __copyright__ = "MarcoMernberger"
 __license__ = "mit"
 
+    
+def test_prompt_session():
+    inp = create_pipe_input()
 
-def test_fib():
-    assert 1 == 1
+    try:
+        inp.send_text("hello\n")
+        session = PromptSession(
+            input=inp,
+            output=DummyOutput(),
+        )
 
+        result = session.prompt()
+    finally:
+        inp.close()
+
+    assert result == "hello"
+
+
+def test_app_session():    
+    dispatcher = RunDispatcher()
+    inp = create_pipe_input()
+    try:
+        inp.send_bytes(b"Hello\n")  # \n\t\n
+        session = Application(
+            input=inp,
+            output=DummyOutput(),
+        )
+        inp.send_bytes(b"Hello\n")  # \n\t\n
+        result = session.run(set_exception_handler=True, in_thread=False)
+    finally:
+        inp.close()
+
+    assert result == "AGG"
+    # enter tab enter
+    #dia = PromptSession(
+    #    input=inp,
+    #    output=DummyOutput
+    #)
+    #dispatcher.request_groups()
+    #patch("dispatcher.request_groups._get_app", return_value=dia)
+    # print(dispatcher.request_groups())
+
+    # def test_group():
+        #checkboxlist_dialog(
+        #    title="Run IDs",
+        #    text="Select the run ids:",
+        #    values=dispatcher.all_run_ids_and_folders_as_tuples,
+        #)
+        # ret = dia.run()
+        # print(dia.input)
+    # dia.input = inp
+    # assert 12 == 2
+    
 
 def test_init():
     dispatcher = RunDispatcher()
@@ -125,43 +179,62 @@ def test_generate_message():
     assert f"This link will expire in {dispatcher.MAXDAYS} days." in msg._payload
 
 
-def test_check_all_folders(capsys):
+def test_print_check_all_folders(capsys):
     dispatcher = RunDispatcher()
-    dispatcher.check_all_folders()
+    dispatcher.print_check_all_folders()
     captured = capsys.readouterr()
     assert "ok" in captured.out
 
 
-def test_get_run_ids(capsys):
+def test_check_all_folders(capsys):
+    dispatcher = RunDispatcher()
+    res = dispatcher.check_all_folders()
+    assert "ok" in res
+
+
+def test_print_run_ids(capsys):
     dispatcher = RunDispatcher()
     dispatcher.print_run_ids()
     captured = capsys.readouterr().out
     assert len(captured.split("\n")) >= 10
 
 
-def test_dispatch(capsys):
+def test_get_run_ids():
     dispatcher = RunDispatcher()
-    dispatcher.to_default_recipients = False
-    with pytest.raises(ValueError):
-        dispatcher.dispatch("run_ids", "ag", [])
-    valid_run_id = next(iter(dispatcher.run_ids.keys()))
-    with pytest.raises(ValueError):
-        dispatcher.dispatch(valid_run_id, "ag", [])
-    with pytest.raises(smtplib.SMTPRecipientsRefused):
-        dispatcher.dispatch([valid_run_id], "ag", [])
-    res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
-    captured = capsys.readouterr().out
-    assert res[0] == 221
-    assert "Dispatching emails" in captured
-    dispatcher.run_ids["bla"] = Path("some_none_Existing_folder")
-    with pytest.raises(ValueError):
-        dispatcher.dispatch(["bla"], "ag", [dispatcher.default_recipients[0]])
+    run_id_str = dispatcher.get_run_ids_string()
+    assert len(run_id_str.split("\n")) >= 10
 
 
-def test_send_email():
+def test_request_run_ids():
     dispatcher = RunDispatcher()
-    dispatcher.to_default_recipients = False
-    with pytest.raises(smtplib.SMTPRecipientsRefused):
-        dispatcher.send_email("test.tar.gz", "1234", "", "TEST")
-    res = dispatcher.send_email("test.tar.gz", "1234", dispatcher.default_recipients[0], "TEST")
-    assert res[0] == 221
+    run_id_str = dispatcher.get_run_ids_string()
+    assert len(run_id_str.split("\n")) >= 10
+
+
+# def test_dispatch(capsys):
+    # dispatcher = RunDispatcher()
+    # dispatcher.to_default_recipients = False
+    # with pytest.raises(ValueError):
+        # dispatcher.dispatch("run_ids", "ag", [])
+    # valid_run_id = next(iter(dispatcher.run_ids.keys()))
+    # with pytest.raises(ValueError):
+        # dispatcher.dispatch(valid_run_id, "ag", [])
+    # with pytest.raises(smtplib.SMTPRecipientsRefused):
+        # dispatcher.dispatch([valid_run_id], "ag", [])
+    # res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+    # captured = capsys.readouterr().out
+    # assert res[0] == 221
+    # assert "Dispatching emails" in captured
+    # dispatcher.run_ids["bla"] = Path("some_none_Existing_folder")
+    # with pytest.raises(ValueError):
+        # dispatcher.dispatch(["bla"], "ag", [dispatcher.default_recipients[0]])
+# 
+# 
+# def test_send_email():
+    # dispatcher = RunDispatcher()
+    # dispatcher.to_default_recipients = False
+    # with pytest.raises(smtplib.SMTPRecipientsRefused):
+        # dispatcher.send_email("test.tar.gz", "1234", "", "TEST")
+    # res = dispatcher.send_email("test.tar.gz", "1234", dispatcher.default_recipients[0], "TEST")
+    # assert res[0] == 221
+# 
