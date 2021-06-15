@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-    Dummy conftest.py for mgenomicsremotemail.
-
-    If you don't know what this is for, just leave it empty.
-    Read more about conftest.py under:
-    https://pytest.org/latest/plugins.html
-"""
-
-# import pytest
+"""conftest.py for mgenomicsremotemail."""
+import sys
+sys.path.append("/talizorah/mf/andrea_remote/mgenomicsremotemail/src")

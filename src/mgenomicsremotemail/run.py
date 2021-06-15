@@ -4,6 +4,8 @@ This is the executable run file for the dispatcher.
 """
 import sys
 import logging
+import sys
+sys.path.append("/talizorah/mf/andrea_remote/mgenomicsremotemail/src")
 from mgenomicsremotemail import __version__
 from prompt_toolkit.shortcuts import (
     checkboxlist_dialog,
@@ -11,18 +13,17 @@ from prompt_toolkit.shortcuts import (
     progress_dialog,
     input_dialog
 )
-from .dispatcher import RunDispatcher
+import dispatch
 
 
 __author__ = "MarcoMernberger"
 __copyright__ = "MarcoMernberger"
 __license__ = "mit"
 
-_logger = logging.getLogger(__name__)
 
 
 if __name__ == "__main__":
-    dispatcher = RunDispatcher()
+    dispatcher = dispatch.RunDispatcher()
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
         dispatcher.print_run_ids()
         dispatcher.check_all_folders()
