@@ -35,6 +35,7 @@ htmlcov/*
 junit.xml
 coverage.xml
 .pytest_cache/
+pytest-*
 
 # Build and docs folder/files
 build/*
@@ -48,3 +49,6 @@ MANIFEST
 
 # Per-project virtualenvs
 .venv*/
+
+# vscode
+.vscode

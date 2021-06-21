@@ -1,84 +1,65 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-import hashlib
 import tarfile
 import subprocess
 import smtplib
 from mgenomicsremotemail.dispatch import RunDispatcher
 from pathlib import Path
-from prompt_toolkit.application import create_app_session, DummyApplication, Application
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
-from prompt_toolkit.shortcuts import PromptSession, checkboxlist_dialog
+from prompt_toolkit.application.current import AppSession
 from mock import patch
+from datetime import datetime
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.application import Application
 
 
 __author__ = "MarcoMernberger"
 __copyright__ = "MarcoMernberger"
 __license__ = "mit"
 
-    
-def test_prompt_session():
-    inp = create_pipe_input()
 
-    try:
-        inp.send_text("hello\n")
-        session = PromptSession(
-            input=inp,
-            output=DummyOutput(),
-        )
+def app_func_with_input(app_function, *args):
+    def __func():
+        return app_function(*args)
 
-        result = session.prompt()
-    finally:
-        inp.close()
-
-    assert result == "hello"
+    return __func
 
 
-def test_app_session():    
-    dispatcher = RunDispatcher()
-    inp = create_pipe_input()
-    try:
-        inp.send_bytes(b"Hello\n")  # \n\t\n
-        session = Application(
-            input=inp,
-            output=DummyOutput(),
-        )
-        inp.send_bytes(b"Hello\n")  # \n\t\n
-        result = session.run(set_exception_handler=True, in_thread=False)
-    finally:
-        inp.close()
+def get_mock(input_fuction_dict, app_function):
+    def __mock_function(*formatted_text):
+        for key in input_fuction_dict:
+            if str(formatted_text[0][0][1]).startswith(key):
+                inp = input_fuction_dict[key]
+                app_func = app_func_with_input(app_function, *formatted_text)
+                return get_patched_app(inp, app_func)
+        else:
+            raise ValueError()
 
-    assert result == "AGG"
-    # enter tab enter
-    #dia = PromptSession(
-    #    input=inp,
-    #    output=DummyOutput
-    #)
-    #dispatcher.request_groups()
-    #patch("dispatcher.request_groups._get_app", return_value=dia)
-    # print(dispatcher.request_groups())
+    return __mock_function
 
-    # def test_group():
-        #checkboxlist_dialog(
-        #    title="Run IDs",
-        #    text="Select the run ids:",
-        #    values=dispatcher.all_run_ids_and_folders_as_tuples,
-        #)
-        # ret = dia.run()
-        # print(dia.input)
-    # dia.input = inp
-    # assert 12 == 2
-    
+
+def get_patched_app(input, app_function):
+    patched_app = app_function()
+    patched_app.input = input
+    patched_app.output = DummyOutput()
+    return patched_app
+
 
 def test_init():
     dispatcher = RunDispatcher()
-    all_paths = ["/rose/ffs/incoming", "/rose/ffs/incoming/NextSeq", "/rose/ffs/incoming/MiSeq"]
+    all_paths = [
+        "/rose/ffs/incoming",
+        "/rose/ffs/incoming/NextSeq",
+        "/rose/ffs/incoming/MiSeq",
+    ]
     for path in dispatcher.all_paths:
         assert str(path) in all_paths
     assert dispatcher.public_path == Path("/mf/ffs/www/imtwww_nginx/webroot/public")
     assert dispatcher.MAXDAYS == 14
+    assert not dispatcher.do_clean_up
+    assert isinstance(dispatcher.all_run_ids_and_folders_as_tuples, list)
 
 
 def test_ids():
@@ -86,7 +67,6 @@ def test_ids():
     assert len(dispatcher.run_ids) > 1
     for run_id in dispatcher.run_ids:
         try:
-            print(run_id)
             assert run_id[0].isdigit()
             assert isinstance(run_id, str)
             assert isinstance(dispatcher.run_ids[run_id], Path)
@@ -117,6 +97,7 @@ def test_tar_gz(tmp_path):
     assert archive.exists()
     tf = tarfile.open(archive)
     assert fastq.name == tf.getmembers()[0].name
+    assert dispatcher._targz(infolder, "test") is None
 
 
 def test_get_md5sum(tmp_path):
@@ -135,7 +116,9 @@ def test_get_input_folder(tmp_path):
     dispatcher = RunDispatcher()
     run_id = "12345"
     folder1 = tmp_path / run_id
-    in1 = folder1 / run_id / "Alignment_1" / "22222" / "Fastq"  # current style NextSeq folder (2021)
+    in1 = (
+        folder1 / run_id / "Alignment_1" / "22222" / "Fastq"
+    )  # current style NextSeq folder (2021)
     in2 = folder1 / run_id / "Alignment_2" / "23333" / "Fastq"
     run_id = "12346"
     folder2 = tmp_path / run_id
@@ -165,6 +148,7 @@ def test_clear_archive(tmp_path):
     assert fastq.exists()
     dispatcher.clear_archive("1234", fastq)
     assert not fastq.exists()
+    assert dispatcher.clear_archive("1234", Path("noarchive")) is None
 
 
 def test_generate_message():
@@ -211,30 +195,213 @@ def test_request_run_ids():
     assert len(run_id_str.split("\n")) >= 10
 
 
-# def test_dispatch(capsys):
-    # dispatcher = RunDispatcher()
-    # dispatcher.to_default_recipients = False
-    # with pytest.raises(ValueError):
-        # dispatcher.dispatch("run_ids", "ag", [])
-    # valid_run_id = next(iter(dispatcher.run_ids.keys()))
-    # with pytest.raises(ValueError):
-        # dispatcher.dispatch(valid_run_id, "ag", [])
-    # with pytest.raises(smtplib.SMTPRecipientsRefused):
-        # dispatcher.dispatch([valid_run_id], "ag", [])
-    # res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
-    # captured = capsys.readouterr().out
-    # assert res[0] == 221
-    # assert "Dispatching emails" in captured
-    # dispatcher.run_ids["bla"] = Path("some_none_Existing_folder")
-    # with pytest.raises(ValueError):
-        # dispatcher.dispatch(["bla"], "ag", [dispatcher.default_recipients[0]])
-# 
-# 
-# def test_send_email():
-    # dispatcher = RunDispatcher()
-    # dispatcher.to_default_recipients = False
-    # with pytest.raises(smtplib.SMTPRecipientsRefused):
-        # dispatcher.send_email("test.tar.gz", "1234", "", "TEST")
-    # res = dispatcher.send_email("test.tar.gz", "1234", dispatcher.default_recipients[0], "TEST")
-    # assert res[0] == 221
-# 
+def test_request_groups():
+    dispatcher = RunDispatcher()
+    inp = create_pipe_input()
+    inp.send_text("Test\r\r")
+    group = ""
+    with patch(
+        "prompt_toolkit.application.current._current_app_session",
+        return_value=AppSession(inp, DummyOutput()),
+    ):
+        with patch("prompt_toolkit.renderer.Renderer.render", return_value=None):
+            with patch(
+                "mgenomicsremotemail.dispatch.RunDispatcher._get_input_app",
+                return_value=get_patched_app(inp, dispatcher._get_input_app),
+            ):
+                group = dispatcher.request_groups()
+    assert "Test" == group
+
+
+def test_request_emails():
+    dispatcher = RunDispatcher()
+    with patch("prompt_toolkit.renderer.Renderer.render", return_value=None):
+        with patch(
+            "prompt_toolkit.application.current._current_app_session",
+            return_value=AppSession(create_pipe_input(), DummyOutput()),
+        ):
+            inp_correct = create_pipe_input()
+            inp_correct.send_text("valid_email@test.com\r\r")
+            inp_wrong1 = create_pipe_input()
+            inp_wrong1.send_text("invalid.email\r\r")
+            inp_wrong2 = create_pipe_input()
+            inp_wrong2.send_text("invalidłemail.com\r\r")
+            alternate_inputs = {
+                "Please": inp_wrong1,
+                "'invalid.email'": inp_wrong2,
+                "'invalidłemail.com'": inp_correct,
+            }
+            dispatcher._get_email_app = get_mock(
+                alternate_inputs, dispatcher._get_email_app
+            )
+            recipients = dispatcher.request_emails()
+            assert recipients[0] == "valid_email@test.com"
+
+
+def test_request_emails_once():
+    dispatcher = RunDispatcher()
+    with patch("prompt_toolkit.renderer.Renderer.render", return_value=None):
+        inp = create_pipe_input()
+        with patch(
+            "prompt_toolkit.application.current._current_app_session",
+            return_value=AppSession(inp, DummyOutput()),
+        ):
+            emails = ["valid.email@test.com", "another_valid_email@test.com"]
+            inp.send_text(
+                "valid.email@test.com,another_valid_email@test.com\r\rvalid.email@test.com\r\rinvalid.emailłtest.com\r\rvalid.email@test.com,  another_valid_email@test.com\r\r"
+            )
+            with patch(
+                "mgenomicsremotemail.dispatch.RunDispatcher._get_email_app",
+                return_value=get_patched_app(inp, dispatcher._get_input_app),
+            ):
+                recipients = dispatcher._request_emails_once("", None)
+                for expected, received in zip(emails, recipients):
+                    assert expected == received
+            with patch(
+                "mgenomicsremotemail.dispatch.RunDispatcher._get_email_app",
+                return_value=get_patched_app(inp, dispatcher._get_input_app),
+            ):
+                recipients = dispatcher._request_emails_once("", None)
+                assert "valid.email@test.com" == recipients[0]
+            with patch(
+                "mgenomicsremotemail.dispatch.RunDispatcher._get_email_app",
+                return_value=get_patched_app(inp, dispatcher._get_input_app),
+            ):
+                recipients = dispatcher._request_emails_once("", None)
+                assert "invalid.emailłtest.com" == recipients[0]
+                accepted, _ = dispatcher._validate_recipients(["invalid.email@test"])
+                assert not accepted
+            with patch(
+                "mgenomicsremotemail.dispatch.RunDispatcher._get_email_app",
+                return_value=get_patched_app(inp, dispatcher._get_input_app),
+            ):
+                recipients = dispatcher._request_emails_once("", None)
+                for expected, received in zip(emails, recipients):
+                    assert expected == received
+
+
+def test_validate_recipients():
+    dispatcher = RunDispatcher()
+    accept, _ = dispatcher._validate_recipients(
+        ["valid.email@test.com", "another_valid_email@test.com"]
+    )
+    assert accept
+    accept, _ = dispatcher._validate_recipients(["invalid.emailłtest.com"])
+    assert not accept
+    accept, _ = dispatcher._validate_recipients(["invalid.email@test"])
+    assert not accept
+
+
+def make_mock_file(path_2_files, name):
+    with (path_2_files / f"{name}.tar.gz").open("w") as op:
+        op.write("something")
+
+
+def test_dispatch(capsys, tmp_path):
+    dispatcher = RunDispatcher()
+    pubpath = tmp_path / "dest"
+    pubpath.mkdir()
+    dispatcher.public_path = pubpath
+    assert dispatcher.dispatch([], "", []) is None
+    with pytest.raises(ValueError):
+        dispatcher.dispatch(["run_ids"], "ag", [])
+    dispatcher.to_default_recipients = False
+    dispatcher._targz = make_mock_file
+    dispatcher.get_input_folder = lambda *args: tmp_path
+    dispatcher._move = lambda new_archive, public_archive: print("move called")
+    valid_run_id = next(iter(dispatcher.run_ids.keys()))
+    with pytest.raises(ValueError):
+        dispatcher.dispatch(valid_run_id, "ag", [])
+    with pytest.raises(ValueError):
+        dispatcher.dispatch(valid_run_id, "ag", [])
+    with pytest.raises(smtplib.SMTPRecipientsRefused):
+        empty_folder = tmp_path / "empty"
+        empty_folder.mkdir()
+        with patch("mgenomicsremotemail.dispatch.RunDispatcher.get_input_folder", return_value=empty_folder):
+            dispatcher.dispatch([valid_run_id], "ag", [])
+    dispatcher.run_ids["bla"] = Path("some_none_Existing_folder")
+    dispatcher.send_email = lambda *args: "send called"
+    with pytest.raises(ValueError):
+        dispatcher.dispatch(["bla"], "ag", [dispatcher.default_recipients[0]])
+    res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+    captured = capsys.readouterr().out
+    assert res == "send called"
+    assert "Dispatching emails" in captured
+    assert "Moving to public" in captured
+    res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+
+
+def test_send_email():
+    dispatcher = RunDispatcher()
+    dispatcher.to_default_recipients = False
+    with pytest.raises(smtplib.SMTPRecipientsRefused):
+        dispatcher.send_email("test.tar.gz", "1234", "", "TEST")
+    with patch("smtplib.SMTP.sendmail", return_value=False):
+        res = dispatcher.send_email("test.tar.gz", "1234", [dispatcher.default_recipients[0]], "TEST")
+        assert res[0] == 221
+
+
+def test_get_ctime():
+    dispatcher = RunDispatcher()
+    dt = dispatcher.get_ctime(Path(__file__))
+    assert isinstance(dt, datetime)
+
+
+def test_get_old_files():
+    dispatcher = RunDispatcher()
+    thisfolder = Path(__file__).parent
+    dispatcher.public_path = thisfolder
+    dispatcher.MAXDAYS = 0
+    for f in thisfolder.iterdir():
+        assert f in dispatcher._get_old_files()
+
+
+def test_cleanup(tmp_path):
+    testfile = Path(tmp_path, "test")
+    with testfile.open("w") as op:
+        op.write("something")
+    dispatcher = RunDispatcher()
+    dispatcher.public_path = tmp_path
+    dispatcher.MAXDAYS = 0
+    assert testfile.exists()
+    dispatcher.cleanup()
+    assert not testfile.exists()
+
+
+def test_move(tmp_path):
+    new_archive = tmp_path / "source"
+    public_archive = tmp_path / "dest"
+    with (new_archive).open("w") as op:
+        op.write("something")
+    assert new_archive.exists()
+    dispatcher = RunDispatcher()
+    dispatcher._move(new_archive, public_archive)
+    assert public_archive.exists()
+    assert not new_archive.exists()
+
+
+def test_get_formatted_text():
+    dispatcher = RunDispatcher()
+    assert isinstance(dispatcher._get_formatted_text("str", False), FormattedText)
+    assert isinstance(dispatcher._get_formatted_text("str", False), FormattedText)
+
+
+def test_run():
+    dispatcher = RunDispatcher()
+    dispatcher.dispatch = lambda *args: print("dispatch called")
+    dispatcher.request_run_ids = lambda *args: print("request_run_ids called")
+    dispatcher.request_emails = lambda *args: print("request_emails called")
+    dispatcher.request_groups = lambda *args: print("request_groups called")
+    dispatcher.dispatch = lambda *args: print("dispatch called")
+    dispatcher.cleanup = lambda *args: print("cleanup called")
+    assert dispatcher.run()
+
+
+def test_get_run_id_app():
+    with patch(
+        "prompt_toolkit.application.current._current_app_session",
+        return_value=AppSession(create_pipe_input(), DummyOutput()),
+    ):
+        with patch("prompt_toolkit.renderer.Renderer.render", return_value=None):
+            dispatcher = RunDispatcher()
+            assert isinstance(dispatcher._get_run_id_app(), Application)

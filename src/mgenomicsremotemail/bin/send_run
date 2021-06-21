@@ -1,74 +1,33 @@
 #!/usr/bin/env python 
 """
-This is the executable run file for the dispatcher.
+This is the entry point for the dispatcher.
 """
+from mgenomicsremotemail.dispatch import RunDispatcher
 import sys
+import click
 from pathlib import Path
 sys.path.append(str(Path(__file__, '..', '..', '..').resolve()))
-import click
-from mgenomicsremotemail.dispatch import RunDispatcher
-from mgenomicsremotemail import __version__
+
 
 __author__ = "MarcoMernberger"
 __copyright__ = "MarcoMernberger"
 __license__ = "mit"
 
 
-@click.command()
+@click.group(invoke_without_command=True)
 @click.option("--check", required=False, is_flag=True, help="Check input folders")
-@click.option("--ids", required=False, is_flag=True, help="Print available Run IDs")
+@click.option("--ids", required=False, is_flag=True, help="Show available Run IDs")
 def run(check, ids):
+    click.echo("Here")
     dispatcher = RunDispatcher()
-    if ids or check:
-        if ids:
-            click.echo(dispatcher.get_run_ids_string())
-        if check:
-            click.echo(dispatcher.check_all_folders())
+    if check:
+        click.echo(dispatcher.check_all_folders())
+    elif ids:
+        click.echo(dispatcher.get_run_ids_string())
     else:
-        # sen_id = prompt("Enter run id: ")
-        # group = prompt("Enter research group: ")
-        # recipients = prompt("Enter recipients: ")
-        run_ids = dispatcher.request_run_ids()
-        click.echo(run_ids)
-        group = dispatcher.request_groups()
-        
+        dispatcher.run()
+        click.echo("Run completed")
+
+
 if __name__ == "__main__":
     run()
-
-"""
-    run_ids = ["210525_M03491_0002_000000000-JK2M3"]
-    group = "ME"
-    recipients = ["ME"]
-
-
-    print("run_ids", run_ids)
-    print("group", group)
-    recipients_ok = False
-    textr = "Please enter the recipient enails as comma-separated list:"
-    style = None
-    while not recipients_ok:
-        recipients_ok = True
-        recipients = input_dialog(
-            title="Recipients",
-            text=textr,
-            style=style,
-        ).run()
-        if recipients is not None:
-            recipients = recipients.split(",")
-            for email in recipients:
-                try:
-                    validate_email(email)
-                except EmailNotValidError:
-                    textr = FormattedText(
-                        [
-                            (
-                                "#ff0000",
-                                "One or more emails where not valid.\n Please enter the recipient enails as comma-separated list:",
-                            )
-                        ]
-                    )
-                    recipients_ok = False
-    print("Recipients", recipients)
-"""
-#    dispatcher.dispatch(run_ids, group, recipients)
-#    dispatcher.cleanup()

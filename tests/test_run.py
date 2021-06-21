@@ -1,25 +1,10 @@
 import pytest
 import sys
-from prompt_toolkit.application import create_app_session
-from prompt_toolkit.input import create_pipe_input
-from prompt_toolkit.output import DummyOutput
 import re
 import runpy
-from mgenomicsremotemail.dispatch import RunDispatcher
 from pathlib import Path
-from argparse import ArgumentParser as ArgParser
-from pprint import pprint
 from mock import patch
 
-
-@pytest.fixcture
-def mock_input():
-    pipe_input = create_pipe_input()
-    try:
-        with create_app_session(input=pipe_input, output=DummyOutput()):
-            yield pipe_input
-    finally:
-        pipe_input.close()
 
 class TestRun:
     exec_file = str(Path(__file__, '..', '..', 'src', 'mgenomicsremotemail', 'bin', 'send_run').resolve())
@@ -33,8 +18,9 @@ class TestRun:
         except SystemExit:
             captured = capsys.readouterr().out
             assert len(captured.split("\n")) >= 500
+            assert "Existing run ids:" in captured
 
-    @pytest.mark.parametrize('executable, argument', [(exec_file, "--check")])  #, (exec_file, "--check"), (exec_file, "--help")])
+    @pytest.mark.parametrize('executable, argument', [(exec_file, "--check")])
     def test_script_execution_check(self, executable, argument, capsys):
         assert isinstance(executable, str)
         sys.argv = [executable, argument]
@@ -43,6 +29,7 @@ class TestRun:
         except SystemExit:
             captured = capsys.readouterr().out
             assert len(re.findall(" ok", captured)) >= 100
+            assert "Checking all Run IDs:" in captured
 
     @pytest.mark.parametrize('executable, argument', [(exec_file, "--help")])
     def test_script_execution_help(self, executable, argument, capsys):
@@ -53,12 +40,16 @@ class TestRun:
         except SystemExit:
             captured = capsys.readouterr().out
             assert "help" in captured
+            assert "Usage:" in captured
 
     @pytest.mark.parametrize('executable', [exec_file])
-    def test_script_execution(self, executable, capsys, monkeypatch):
+    def test_script_execution(self, executable, capsys):
+        sys.argv = [executable]
         try:
-            runpy.run_path(executable, run_name="__main__")
+            with patch("mgenomicsremotemail.dispatch.RunDispatcher.run", return_value=True):
+                runpy.run_path(executable, run_name="__main__")
+                captured = capsys.readouterr().out
+                print(captured)
         except SystemExit:
             captured = capsys.readouterr().out
-            print(captured)
-            assert 1 == 2
+            assert "Run completed" in captured

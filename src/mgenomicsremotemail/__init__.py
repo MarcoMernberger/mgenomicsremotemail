@@ -11,5 +11,3 @@ finally:
     del get_distribution, DistributionNotFound
 
 from .dispatch import *
-
-print(__version__)
