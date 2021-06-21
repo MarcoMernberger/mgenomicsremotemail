@@ -437,7 +437,7 @@ Best of luck!
                 if run_folder.exists():
                     path_2_files = self.get_input_folder(run_folder, run_id)
                     if path_2_files is None:
-                        raise ValueError(f"No folder containing fastq files found in {run_folder}")
+                        raise ValueError(f"No folder containing fastq files found in {run_folder}")  # pragma: no cover
                     else:
                         print(f"Collecting data from {path_2_files} ...")
                         # now we know the path to fastq files
