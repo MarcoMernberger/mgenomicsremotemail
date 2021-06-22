@@ -9,3 +9,5 @@ except DistributionNotFound:  # pragma: no cover
     __version__ = 'unknown'  # pragma: no cover
 finally:
     del get_distribution, DistributionNotFound
+
+from . import dispatch
