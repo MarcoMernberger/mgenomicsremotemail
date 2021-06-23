@@ -11,3 +11,4 @@ finally:
     del get_distribution, DistributionNotFound
 
 from . import dispatch
+from . import bin
