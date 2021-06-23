@@ -4,8 +4,6 @@ This is the entry point for the dispatcher.
 """
 import click
 import sys
-print(sys.path)
-import prompt_toolkit
 from pathlib import Path
 sys.path.append(str(Path(__file__, '..', '..', '..').resolve()))
 from mgenomicsremotemail.dispatch import RunDispatcher

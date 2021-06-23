@@ -1,6 +1,6 @@
 # mgenomicsremotemail
 
-Remote email dispatcher for andrea
+Remote email dispatcher for Genomics Unit
 
 
 ## Description
