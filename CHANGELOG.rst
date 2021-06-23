@@ -12,3 +12,8 @@ Version 0.0.2
 
 - changed meta data
 - added click to requirements
+
+Version 0.0.3
+=============
+
+- removed test print statement

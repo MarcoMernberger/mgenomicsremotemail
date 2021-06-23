@@ -18,7 +18,6 @@ __license__ = "mit"
 @click.option("--check", required=False, is_flag=True, help="Check input folders")
 @click.option("--ids", required=False, is_flag=True, help="Show available Run IDs")
 def run(check, ids):
-    click.echo("Here")
     dispatcher = RunDispatcher()
     if check:
         click.echo(dispatcher.check_all_folders())
