@@ -17,3 +17,8 @@ Version 0.0.3
 =============
 
 - removed test print statement
+
+Version 0.0.4
+=============
+
+- changed tar-gz generation to writeble public path

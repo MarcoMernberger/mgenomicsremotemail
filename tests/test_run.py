@@ -7,7 +7,7 @@ from mock import patch
 
 
 class TestRun:
-    exec_file = str(Path(__file__, '..', '..', 'src', 'mgenomicsremotemail', 'bin', 'send_run').resolve())
+    exec_file = str(Path(__file__, '..', '..', 'src', 'mgenomicsremotemail', 'bin', 'run.py').resolve())
 
     @pytest.mark.parametrize('executable, argument', [(exec_file, "--ids")])
     def test_script_execution_ids(self, executable, argument, capsys):

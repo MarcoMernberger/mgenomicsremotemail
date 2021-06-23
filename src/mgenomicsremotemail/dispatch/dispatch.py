@@ -12,12 +12,13 @@ from typing import List, Dict, Tuple, Union
 from email.mime.text import MIMEText
 import sys
 import smtplib
-import subprocess
+import tempfile
 import shutil
 import os
 import time
 import hashlib
 import re
+import tarfile
 from datetime import datetime
 from prompt_toolkit.application import Application
 from email_validator import validate_email, EmailNotValidError
@@ -61,7 +62,7 @@ class RunDispatcher:
             "andrea.nist@imt.uni-marburg.de",
             "katharina.humpert@uni-marburg.de"
         ]
-        self.do_clean_up = False  # wehter to clean the public folder
+        self.do_clean_up = True  # wehter to clean the public folder
 
     def __collect_ids(self) -> None:
         """
@@ -251,7 +252,7 @@ Best of luck!
         res = s.quit()
         return res
 
-    def _targz(self, infolder: Path, name: str) -> None:
+    def _targz(self, infolder: Path, public_archive: Path) -> None:
         """
         _targz creates the archive file with all fastq files to be send.
 
@@ -262,21 +263,16 @@ Best of luck!
         ----------
         infolder : [Path]
             The fastq folder.
-        name : [str]
-            The archive name.
-
-        Raises
-        ------
-        CalledProcessError
-            if the tar call via subprocess fails.
+        public_archive : [Path]
+            The created archive.
         """
-        if not (infolder / f"{name}.tar.gz").exists():
-            command = ["tar", "-czvf", f"{name}.tar.gz", "*.fastq.gz"]
-            try:
-                subprocess.check_call(" ".join(command), cwd=str(infolder), shell=True)
-            except subprocess.CalledProcessError:   # pragma: no cover
-                print(" ".join(command))    # pragma: no cover
-                raise   # pragma: no cover
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_archive = Path(tmp_dir) / public_archive.name
+            with tarfile.open(temp_archive, mode="w:gz") as op:
+                for source in infolder.iterdir():
+                    if ".fastq" in source.name and not source.is_dir():
+                        op.add(source, arcname=source.name)
+            self._move(str(temp_archive), str(public_archive))
 
     def _get_md5sum(self, path_2_file: Path) -> str:
         """
@@ -395,7 +391,7 @@ Best of luck!
         if archive_file.exists():
             checksum = self._get_md5sum(archive_file)
             if checksum != md5sum:
-                os.unlink(archive_file)
+                archive_file.unlink()
 
     def dispatch(self, run_ids: List[str], ag: str, recipients: List[str]) -> Tuple[int, bytes]:
         """
@@ -430,6 +426,7 @@ Best of luck!
         """
         if self.to_default_recipients:
             recipients.extend(self.default_recipients)
+        res = -1, b"None"
         for run_id in run_ids:
             name = f"{run_id}_AG_{ag}"
             if run_id in self.run_ids:
@@ -443,25 +440,24 @@ Best of luck!
                         # now we know the path to fastq files
                         filename = f"{name}.tar.gz"
                         public_archive = self.public_path / filename
-                        print("Creating tar.gz ...")
-                        self._targz(path_2_files, name)
-                        new_archive = path_2_files / filename
-                        print("Calculating md5sum ...")
-                        md5sum = self._get_md5sum(new_archive)
-                        self.clear_archive(md5sum, public_archive)
-                        print(public_archive)
-                        if not (public_archive).exists():
-                            print("Moving to public ...")
-                            self._move(str(new_archive), str(public_archive))
+                        if not public_archive.exists():
+                            print("Creating tar.gz ...")
+                            self._targz(path_2_files, public_archive)
                         else:
                             print("Archive already exists ...")
+                        print("Calculating md5sum ...")
+                        md5sum = self._get_md5sum(public_archive)
+                        # self.clear_archive(md5sum, public_archive)  # since the archive is now created directly in public_path, this becomes obsolete
+                        # if not (public_archive).exists():
+                        #     print("Moving to public ...")
+                        #     self._move(str(new_archive), str(public_archive))
                         print("Dispatching emails ...")
                         res = self.send_email(filename, md5sum, recipients, ag)
-                        return res
                 else:
                     raise ValueError(f"{run_folder} does not exist.")
             else:
                 raise ValueError(f"Run {run_id} does not exist.")
+        return res
 
     def get_ctime(self, filepath: Path) -> datetime:
         """
@@ -506,7 +502,7 @@ Best of luck!
         as specified by RunDispatcher.MAXDAYS.
         """
         for filename in self._get_old_files():
-            os.unlink(filename)
+            filename.unlink()
 
     def _get_run_id_app(self) -> Application:
         """
