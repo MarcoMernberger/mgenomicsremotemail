@@ -127,17 +127,14 @@ class RunDispatcher:
         for run_id in self.run_ids:
             try:
                 folder = self.get_input_folder(self.run_ids[run_id], run_id)
-                if folder is not None:
-                    if not self.check_for_fastq(folder):
-                        result += f"{run_id}: is empty ({folder})\n"
-                    else:
-                        result += f"{run_id}: is ok\n"
+                if not self.check_for_fastq(folder):
+                    result += f"{run_id}: is empty ({folder})\n"
                 else:
-                    result += f"{run_id}: No run folder detected\n"
+                    result += f"{run_id}: is ok\n"
             except PermissionError:
                 result += f"{run_id}: PermissionError for {folder}\n"
             except ValueError as e:
-                if "No fastq folder found" in str(e):
+                if "No folder containing fastq files found in" in str(e):
                     result += f"{run_id}: No fastq folder for {folder}\n"
                 else:
                     print(run_id, self.run_ids[run_id], e)  # pragma: no cover
@@ -328,7 +325,7 @@ Best of luck!
                 return True
         return False
 
-    def get_input_folder(self, run_folder: Path, run_id) -> Union[Path, None]:
+    def get_input_folder(self, run_folder: Path, run_id) -> Path:
         """
         get_input_folder returns the path to the fastq file for a given run ID.
 
@@ -344,7 +341,7 @@ Best of luck!
 
         Returns
         -------
-        Union[Path, None]
+        Path
             The full path to the folder containing the fastq files.
 
         Raises
@@ -372,7 +369,9 @@ Best of luck!
             elif (run_folder / "Data" / "Intensities" / "BaseCalls").exists():
                 path_2_files = run_folder / "Data" / "Intensities" / "BaseCalls"
             else:
-                raise ValueError(f"No fastq folder found for {str(run_folder)}.")
+                raise ValueError(f"No folder containing fastq files found in {str(run_folder)}")
+        if path_2_files is None:
+            raise ValueError(f"No folder containing fastq files found in {str(run_folder)}")
         return path_2_files
 
     def clear_archive(self, md5sum: str, archive_file: Path) -> None:
@@ -433,8 +432,10 @@ Best of luck!
                 run_folder = self.run_ids[run_id]
                 if run_folder.exists():
                     path_2_files = self.get_input_folder(run_folder, run_id)
-                    if path_2_files is None:
-                        raise ValueError(f"No folder containing fastq files found in {run_folder}")  # pragma: no cover
+                    for x in path_2_files.iterdir():
+                        print(x)
+                    if not self.check_for_fastq(path_2_files):
+                        raise ValueError(f"Folder {str(path_2_files)} is empty for {run_id}")
                     else:
                         print(f"Collecting data from {path_2_files} ...")
                         # now we know the path to fastq files
@@ -447,14 +448,10 @@ Best of luck!
                             print("Archive already exists ...")
                         print("Calculating md5sum ...")
                         md5sum = self._get_md5sum(public_archive)
-                        # self.clear_archive(md5sum, public_archive)  # since the archive is now created directly in public_path, this becomes obsolete
-                        # if not (public_archive).exists():
-                        #     print("Moving to public ...")
-                        #     self._move(str(new_archive), str(public_archive))
                         print("Dispatching emails ...")
                         res = self.send_email(filename, md5sum, recipients, ag)
                 else:
-                    raise ValueError(f"{run_folder} does not exist.")
+                    raise ValueError(f"Folder {run_folder} does not exist.")
             else:
                 raise ValueError(f"Run {run_id} does not exist.")
         return res
@@ -529,10 +526,15 @@ Best of luck!
         Returns
         -------
         List[str]
-            List of run IDs.
+            List of run IDs or None.
         """
         app = self._get_run_id_app()    # pragma: no cover
-        return app.run()    # pragma: no cover
+        res = app.run()    # pragma: no cover
+        if res is None:
+            sys.exit("Aborted!")
+        if len(res) == 0:
+            sys.exit("No run ID selected. Exit!")
+        return res
 
     def _get_input_app(self) -> Application:
         """
@@ -563,7 +565,10 @@ Best of luck!
             The research group to be used.
         """
         app = self._get_input_app()
-        return app.run()
+        res = app.run()
+        if res is None:
+            sys.exit("Aborted!")
+        return res
 
     def _get_email_app(self, textr: str, style: Union[None, Style]) -> Application:
         """
@@ -606,20 +611,17 @@ Best of luck!
         Returns
         -------
         List[str]
-            List of recipient email adresses.
-
-        Raises
-        ------
-        ValueError
-            If no recipient was supplied.
+            List of recipient email adresses. May be empty.
         """
         app = self._get_email_app(textr, style)
         received = app.run()
-        received = re.sub(r"\s+", "", received)
-        if received is not None:
-            recipients = received.split(",")
+        if received is None:
+            sys.exit("Aborted!")
+        if received == "":
+            recipients = []
         else:
-            raise ValueError("Recipients was None")  # pragma: no cover
+            received = re.sub(r"\s+", "", received)
+            recipients = received.split(",")
         return recipients
 
     def _validate_recipients(self, recipients: List[str]) -> Tuple[bool, str]:
@@ -694,7 +696,7 @@ Best of luck!
                 textr = self._get_formatted_text(f"{msg}\n Please enter the recipient emails as comma-separated list:", True)
         return recipients
 
-    def run(self) -> bool:
+    def run(self) -> str:
         """
         run calls the main methid of the dispatcher.
 
@@ -702,12 +704,21 @@ Best of luck!
 
         Returns
         -------
-        bool
-            True
+        str
+            Message to print at the end of excecution.
         """
-        run_ids = self.request_run_ids()
-        recipients = self.request_emails()
-        groups = self.request_groups()
+        try:
+            run_ids = self.request_run_ids()
+        except SystemExit as e:
+            return str(e)
+        try:
+            recipients = self.request_emails()
+        except SystemExit as e:
+            return str(e)
+        try:
+            groups = self.request_groups()
+        except SystemExit as e:
+            return str(e)
         self.dispatch(run_ids, groups, recipients)
         self.cleanup()
-        return True
+        return "Run completed!"

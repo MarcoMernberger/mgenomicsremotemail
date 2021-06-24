@@ -22,3 +22,8 @@ Version 0.0.4
 =============
 
 - changed tar-gz generation to writeble public path
+
+Version 0.0.5
+=============
+
+- Fixed SystemExit on Cancel Input

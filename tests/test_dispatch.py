@@ -13,6 +13,7 @@ from mock import patch
 from datetime import datetime
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.application import Application
+from conftest import MockApp
 
 
 __author__ = "MarcoMernberger"
@@ -58,7 +59,7 @@ def test_init():
         assert str(path) in all_paths
     assert dispatcher.public_path == Path("/mf/ffs/www/imtwww_nginx/webroot/public")
     assert dispatcher.MAXDAYS == 14
-    assert not dispatcher.do_clean_up
+    assert dispatcher.do_clean_up
     assert isinstance(dispatcher.all_run_ids_and_folders_as_tuples, list)
 
 
@@ -90,14 +91,14 @@ def test_check_for_fastq(tmp_path):
 def test_tar_gz(tmp_path):
     dispatcher = RunDispatcher()
     infolder = tmp_path
-    fastq = infolder / "dummy.fastq.gz"
-    fastq.write_text("hi")
-    dispatcher._targz(infolder, "test")
+    for ii in ["1", "2"]:
+        fastq = infolder / f"dummy{ii}.fastq.gz"
+        fastq.write_text("hi")
+    dispatcher._targz(infolder, tmp_path / "test.tar.gz")
     archive = infolder / "test.tar.gz"
     assert archive.exists()
     tf = tarfile.open(archive)
-    assert fastq.name == tf.getmembers()[0].name
-    assert dispatcher._targz(infolder, "test") is None
+    assert fastq.name == tf.getmembers()[1].name
 
 
 def test_get_md5sum(tmp_path):
@@ -105,7 +106,7 @@ def test_get_md5sum(tmp_path):
     infolder = tmp_path
     fastq = infolder / "dummy.fastq.gz"
     fastq.write_text("hi")
-    dispatcher._targz(infolder, "test")
+    dispatcher._targz(infolder, tmp_path / "test.tar.gz")
     archive = infolder / "test.tar.gz"
     sum1 = dispatcher._get_md5sum(archive)
     sum2 = subprocess.check_output(["md5sum", str(archive)]).decode().split()[0]
@@ -189,12 +190,6 @@ def test_get_run_ids():
     assert len(run_id_str.split("\n")) >= 10
 
 
-def test_request_run_ids():
-    dispatcher = RunDispatcher()
-    run_id_str = dispatcher.get_run_ids_string()
-    assert len(run_id_str.split("\n")) >= 10
-
-
 def test_request_groups():
     dispatcher = RunDispatcher()
     inp = create_pipe_input()
@@ -210,7 +205,13 @@ def test_request_groups():
                 return_value=get_patched_app(inp, dispatcher._get_input_app),
             ):
                 group = dispatcher.request_groups()
-    assert "Test" == group
+                assert "Test" == group
+            with patch(
+                "mgenomicsremotemail.dispatch.RunDispatcher._get_input_app",
+                return_value=MockApp(None),
+            ):
+                with pytest.raises(SystemExit, match="Aborted"):
+                    group = dispatcher.request_groups()
 
 
 def test_request_emails():
@@ -248,7 +249,7 @@ def test_request_emails_once():
         ):
             emails = ["valid.email@test.com", "another_valid_email@test.com"]
             inp.send_text(
-                "valid.email@test.com,another_valid_email@test.com\r\rvalid.email@test.com\r\rinvalid.emailłtest.com\r\rvalid.email@test.com,  another_valid_email@test.com\r\r"
+                "valid.email@test.com,another_valid_email@test.com\r\rvalid.email@test.com\r\rinvalid.emailłtest.com\r\rvalid.email@test.com,  another_valid_email@test.com\r\r\r\r\t\t\r"
             )
             with patch(
                 "mgenomicsremotemail.dispatch.RunDispatcher._get_email_app",
@@ -278,6 +279,14 @@ def test_request_emails_once():
                 recipients = dispatcher._request_emails_once("", None)
                 for expected, received in zip(emails, recipients):
                     assert expected == received
+            with patch(
+                "mgenomicsremotemail.dispatch.RunDispatcher._get_email_app",
+                return_value=get_patched_app(inp, dispatcher._get_input_app),
+            ):
+                recipients = dispatcher._request_emails_once("", None)
+                print(recipients)
+                print(dispatcher._validate_recipients(recipients))
+                assert len(recipients) == 0
 
 
 def test_validate_recipients():
@@ -302,33 +311,42 @@ def test_dispatch(capsys, tmp_path):
     pubpath = tmp_path / "dest"
     pubpath.mkdir()
     dispatcher.public_path = pubpath
-    assert dispatcher.dispatch([], "", []) is None
+    assert dispatcher.dispatch([], "", [])[0] == -1
     with pytest.raises(ValueError):
         dispatcher.dispatch(["run_ids"], "ag", [])
     dispatcher.to_default_recipients = False
-    dispatcher._targz = make_mock_file
-    dispatcher.get_input_folder = lambda *args: tmp_path
-    dispatcher._move = lambda new_archive, public_archive: print("move called")
     valid_run_id = next(iter(dispatcher.run_ids.keys()))
-    with pytest.raises(ValueError):
-        dispatcher.dispatch(valid_run_id, "ag", [])
-    with pytest.raises(ValueError):
-        dispatcher.dispatch(valid_run_id, "ag", [])
-    with pytest.raises(smtplib.SMTPRecipientsRefused):
-        empty_folder = tmp_path / "empty"
-        empty_folder.mkdir()
-        with patch("mgenomicsremotemail.dispatch.RunDispatcher.get_input_folder", return_value=empty_folder):
-            dispatcher.dispatch([valid_run_id], "ag", [])
-    dispatcher.run_ids["bla"] = Path("some_none_Existing_folder")
-    dispatcher.send_email = lambda *args: "send called"
-    with pytest.raises(ValueError):
-        dispatcher.dispatch(["bla"], "ag", [dispatcher.default_recipients[0]])
-    res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
-    captured = capsys.readouterr().out
-    assert res == "send called"
-    assert "Dispatching emails" in captured
-    assert "Moving to public" in captured
-    res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+    empty_folder = tmp_path / "empty"
+    empty_folder.mkdir()
+    dispatcher.run_ids[valid_run_id] = tmp_path
+    with pytest.raises(ValueError, match=f"Run 12 does not exist"):
+        dispatcher.dispatch(["12"], "ag", [dispatcher.default_recipients[0]])
+    dispatcher.run_ids["fake_id"] = Path("non_existing_path")
+    with pytest.raises(ValueError, match="Folder non_existing_path does not exist."):
+        dispatcher.dispatch(["fake_id"], "ag", [dispatcher.default_recipients[0]])
+    with pytest.raises(ValueError, match="No folder containing fastq files found in"):
+        dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+    with patch("mgenomicsremotemail.dispatch.RunDispatcher.get_input_folder", return_value=empty_folder):
+        with pytest.raises(ValueError, match=f" is empty for {valid_run_id}"):
+            dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+    input_file = tmp_path / "input" / "test.fastq.gz"
+    input_file.parent.mkdir(exist_ok=True, parents=True)
+    with input_file.open("w") as op:
+        op.write("something")
+    assert input_file.exists()
+    dispatcher.send_email = lambda *args: (1, "send called")
+    with patch("mgenomicsremotemail.dispatch.RunDispatcher.get_input_folder", return_value=input_file.parent):
+        res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+        captured = capsys.readouterr().out
+        assert res[1] == "send called"
+        assert "Collecting data" in captured
+        assert "Dispatching emails" in captured
+        assert "Creating tar.gz" in captured
+        res = dispatcher.dispatch([valid_run_id], "ag", [dispatcher.default_recipients[0]])
+        captured = capsys.readouterr().out
+        print(captured)
+        assert "Archive already exists" in captured
+        assert res[1] == "send called"
 
 
 def test_send_email():

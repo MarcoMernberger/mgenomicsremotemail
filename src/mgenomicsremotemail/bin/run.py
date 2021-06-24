@@ -24,8 +24,8 @@ def run(check, ids):
     elif ids:
         click.echo(dispatcher.get_run_ids_string())
     else:
-        dispatcher.run()
-        click.echo("Run completed")
+        msg = dispatcher.run()
+        click.echo(msg)
 
 
 if __name__ == "__main__":
