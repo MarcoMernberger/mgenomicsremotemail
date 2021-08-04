@@ -32,3 +32,8 @@ Version 0.0.6
 =============
 
 - create temporary tarfile in current directory instead of tmp
+
+Version 0.0.7
+=============
+
+- create temporary tarfile in /machine/temp
