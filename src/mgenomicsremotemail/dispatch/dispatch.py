@@ -263,7 +263,9 @@ Best of luck!
         public_archive : [Path]
             The created archive.
         """
-        with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmp_dir:
+        temp_path_on_machine = Path("/machine/temp")
+        temp_path_on_machine.mkdir(exist_ok=True, parents=True)
+        with tempfile.TemporaryDirectory(dir=temp_path_on_machine) as tmp_dir:
             temp_archive = Path(tmp_dir) / public_archive.name
             print(temp_archive.resolve())
             with tarfile.open(temp_archive, mode="w:gz") as op:
