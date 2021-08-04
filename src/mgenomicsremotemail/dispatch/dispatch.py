@@ -263,8 +263,9 @@ Best of luck!
         public_archive : [Path]
             The created archive.
         """
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmp_dir:
             temp_archive = Path(tmp_dir) / public_archive.name
+            print(temp_archive.resolve())
             with tarfile.open(temp_archive, mode="w:gz") as op:
                 for source in infolder.iterdir():
                     if ".fastq" in source.name and not source.is_dir():
