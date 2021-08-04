@@ -27,3 +27,8 @@ Version 0.0.5
 =============
 
 - Fixed SystemExit on Cancel Input
+
+Version 0.0.6
+=============
+
+- create temporary tarfile in current directory instead of tmp
