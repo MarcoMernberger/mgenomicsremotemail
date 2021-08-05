@@ -289,9 +289,9 @@ Best of luck!
             md5 checksum of path_2_file.
         """
         with path_2_file.open("rb") as inp:
-            md5_hash = hashlib. md5()
-            content = inp.read()
-            md5_hash. update(content)
+            md5_hash = hashlib.md5()
+            while chunk := inp.read(8192):
+                md5_hash.update(chunk)
             md5sum = md5_hash.hexdigest()
         return md5sum
 
@@ -448,7 +448,7 @@ Best of luck!
                             print("Creating tar.gz ...")
                             self._targz(path_2_files, public_archive)
                         else:
-                            print("Archive already exists ...")
+                            print(f"Archive {public_archive} already exists ...")
                         print("Calculating md5sum ...")
                         md5sum = self._get_md5sum(public_archive)
                         print("Dispatching emails ...")

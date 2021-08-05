@@ -37,3 +37,8 @@ Version 0.0.7
 =============
 
 - create temporary tarfile in /machine/temp
+
+Version 0.0.8
+=============
+
+- read md5sum in chunks
