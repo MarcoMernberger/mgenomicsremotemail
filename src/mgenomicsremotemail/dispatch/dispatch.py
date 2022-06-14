@@ -51,7 +51,7 @@ class RunDispatcher:
         normal_path = Path("/rose/ffs/incoming")
         nextseq_path = Path("/rose/ffs/incoming/NextSeq")
         miseq_path = Path("/rose/ffs/incoming/MiSeq")
-        self.public_path = Path("/mf/ffs/www/imtwww_nginx/webroot/public")
+        self.public_path = Path("/mf/ffs/www/mbf_webroot/public")
         self.all_paths = [normal_path, nextseq_path, miseq_path]  # all paths where potenitally Sequencing runs can be found.
         self.__collect_ids()
         self.host = "smtp.staff.uni-marburg.de"
